@@ -1,0 +1,10 @@
+name: capstone
+channels:
+  - conda-forge
+
+dependencies:
+  - jupyter
+  - pyspark
+  - tensorflow
+  - pip:
+    - matplotlib
