@@ -13,9 +13,11 @@ data_dir = '/home/cole/Workspace/School/Capstone/data/first_data_set/TestData/'
 output_dir = data_dir + "/merge_data"
 
 def combine():
-    # initiates a SparkContext which is necessary for accessing data in Spark
-    sc = SparkContext()
+    # Checks if there is a SparkContext running if so grab that if not start a new one
+    sc = SparkContext.getOrCreate()
     sqlContext = SQLContext(sc)
+
+    # Load all of the CSVs
     AFBF = sqlContext.read.format('com.databricks.spark.csv').option("header", "true").load([data_dir+"/AF_BITFILES.csv"])
     BACKUP_OBJECTS = sqlContext.read.format('com.databricks.spark.csv').option("header", "true").load([data_dir+"/BACKUP_OBJECTS.csv"])
     ARCHIVE_OBJECTS = sqlContext.read.format('com.databricks.spark.csv').option("header", "true").load([data_dir+"/ARCHIVE_OBJECTS.csv"])
@@ -28,66 +30,62 @@ def combine():
     SDRO = sqlContext.read.format('com.databricks.spark.csv').option("header", "true").load([data_dir + '/SD_RECON_ORDER.csv'])
     SS_POOLS = sqlContext.read.format('com.databricks.spark.csv').option("header", "true").load([data_dir + '/SS_POOLS.csv'])
 
+    # Recast columns used to get OUTPUT column. We do this because long and int comparisons are faster than strings
     AFBF = AFBF.withColumn('POOLID', AFBF.POOLID.cast(IntegerType()))
     SD_CONTAINERS = SD_CONTAINERS.withColumn('POOLID', SD_CONTAINERS.POOLID.cast(IntegerType()))
-    SD_CHUNK_LOCATIONS = SD_CHUNK_LOCATIONS.withColumn('CHUNKID', SD_CHUNK_LOCATIONS.CHUNKID.cast(LongType()))
     SD_CHUNK_LOCATIONS = SD_CHUNK_LOCATIONS.withColumn('POOLID', SD_CHUNK_LOCATIONS.POOLID.cast(IntegerType()))
+    SD_CHUNK_LOCATIONS = SD_CHUNK_LOCATIONS.withColumn('CHUNKID', SD_CHUNK_LOCATIONS.CHUNKID.cast(LongType()))
 
+    # get a set of poolids for each classification
     tape = [row['POOLID'] for row in AFBF.select("POOLID").distinct().collect()]
+    # these are sets to remove all occurences that have ANY entry of 1 or 2 instead of ALL entries
     cloud = set([row['POOLID'] for row in SD_CONTAINERS.filter(SD_CONTAINERS.TYPE.rlike('3|4')).select('POOLID').distinct().collect()])
     directory = set([row['POOLID'] for row in SD_CONTAINERS.filter(SD_CONTAINERS.TYPE.rlike('1|2')).select('POOLID').distinct().collect()]) - cloud
 
+    # merge AFBF to BACKUP_OBJECTS, this makes finding the tape objects faster
     merge = BACKUP_OBJECTS.join(AFBF, BACKUP_OBJECTS['OBJID'] == AFBF['BFID'], how='left')
     merge = merge.join(SDRO, ['OBJID'], how='left')
+    # recast for performance
     merge = merge.withColumn('POOLID', merge.POOLID.cast(IntegerType()))
     merge = merge.withColumn('CHUNKID', merge.CHUNKID.cast(LongType()))
 
-    cloud_chunkid = []
+    # Get dataframes that have entries that have POOLIDs that are in their respective sets
+    cloud_chunkid = SD_CHUNK_LOCATIONS.where(SD_CHUNK_LOCATIONS.POOLID.isin(cloud)).select(SD_CHUNK_LOCATIONS.CHUNKID)
+    directory_chunkid = SD_CHUNK_LOCATIONS.where(SD_CHUNK_LOCATIONS.POOLID.isin(directory)).select(SD_CHUNK_LOCATIONS.CHUNKID)
+    # Find the intersect for each, theres a wierd bug that happens if you skip this step because its a different column object from the merge
+    directory_col = merge.select('CHUNKID').intersect(directory_chunkid)
+    cloud_col = merge.select('CHUNKID').intersect(cloud_chunkid)
 
-    for poolid in cloud:
-        rows = SD_CHUNK_LOCATIONS.select(SD_CHUNK_LOCATIONS.CHUNKID).filter(F.when(SD_CHUNK_LOCATIONS.POOLID == poolid, True).otherwise(False)).distinct().collect()
-        cloud_chunkid.extend([row['CHUNKID'] for row in rows])
-
-    directory_chunkid = []
-
-    for poolid in directory:
-        rows = SD_CHUNK_LOCATIONS.select(SD_CHUNK_LOCATIONS.CHUNKID).filter(F.when(SD_CHUNK_LOCATIONS.POOLID == poolid, True).otherwise(False)).distinct().collect()
-        directory_chunkid.extend([row['CHUNKID'] for row in rows])
-
-    def assign_output(poolid, chunkid):
-        if poolid:
-            return 0
-        if chunkid in directory_chunkid:
-            return 1
-        elif chunkid:
-            return 2
-        else:
-            return None
-
-    output = udf(assign_output, IntegerType())
-
-    merge = merge.withColumn('OUTPUT', output(merge.POOLID, merge.CHUNKID))
+    # construct new dataframe from a copy of the old dataframe with the OUTPUT column augmented on
+    merge = merge.withColumn('OUTPUT', F.when(merge.POOLID.isNotNull(), 0).when(merge.CHUNKID.isin(directory_col.CHUNKID), 1).when(merge.CHUNKID.isin(cloud_col.CHUNKID), 2))
     merge = merge.filter(merge.OUTPUT.isNotNull())
+
     return merge
 
 
 def extract_features(feature_list):
+    sc = SparkContext.getOrCreate()
+    sqlContext = SQLContext(sc)
+    # Here there should be a dictionary with every feature where the value is the cast type
+
     merged_data = combine()
+    # Append OUTPUT to feature list because it is not a feature but necessary
     feature_list.append('OUTPUT')
-    merged_data = merged_data.withColumn("BFSIZE", merged_data["BFSIZE"].cast(LongType()))
-    merged_data = merged_data.withColumn("HDRSIZE", merged_data["HDRSIZE"].cast(LongType()))
-    merged_data = merged_data.withColumn("OUTPUT", merged_data["OUTPUT"].cast(IntegerType()))
-    merged_data = merged_data.filter(merged_data.OUTPUT.isNotNull())
-    merged_data = merged_data.filter(merged_data.BFSIZE.isNotNull())
-    merged_data = merged_data.filter(merged_data.HDRSIZE.isNotNull())
+    # make a copy of the dataframe with only the feature columns and OUTPUT
     merged_data = merged_data.select(feature_list)
-    merged_data = merged_data.repartition(400)
+    # Right here we need to go through the feature list and properly cast and screen (filter out nulls) each value in the columns
     merged_data.write.csv(output_dir + "/feature_extraction")
-    sc.stop()
+    return merged_data
+
 
 def main():
+    sc = SparkContext.getOrCreate()
+    sqlContext = SQLContext(sc)
     extract_features(['BFSIZE', 'HDRSIZE'])
+    sc.stop()
     return 0
+
+
 
 if __name__ == "__main__":
     main()
