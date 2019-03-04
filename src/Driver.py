@@ -31,6 +31,7 @@ def main(features, algorithm, seed, maxiter, stepsize, numtrees, maxdepth, regpa
         # without metadatasize
         Learn.multinomialRegression(feature_list, maxIter=maxiter, regParam=regparam, elasticNetParam = elasticnetparam, threshold=threshold)
     elif algorithm == 'LinearSVC':
+        # python Driver.py 'BFSIZE HDRSIZE NODETYPE NODESTATE METADATASIZE' LinearSVC --maxIter 10 --regParam 0.3 --threshold 0.5
         Learn.linearSVC(feature_list, maxIter=maxiter, regParam=regparam, threshold=threshold)
 
     sc.stop()
