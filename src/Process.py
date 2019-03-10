@@ -6,13 +6,15 @@ from pyspark.sql.functions import udf
 from pyspark.sql.types import IntegerType
 from pyspark.sql.types import LongType
 
+import os
+
 # change to be reflective of your environment
 data_dir = '/home/cole/Workspace/School/Capstone/data/first_data_set/TestData/'
 
 # change to match your environment
 output_dir = data_dir + "/merge_data"
 
-def combine(feature_list, binary=False):
+def combine(feature_list, binary = False, multiclass = True):
     # Checks if there is a SparkContext running if so grab that if not start a new one
     sc = SparkContext.getOrCreate()
     sqlContext = SQLContext(sc)
@@ -78,9 +80,9 @@ def combine(feature_list, binary=False):
         cloud = set([row['POOLID'] for row in SD_CONTAINERS.filter(SD_CONTAINERS.TYPE.rlike('3|4')).select('POOLID').distinct().collect()])
         directory = set([row['POOLID'] for row in SD_CONTAINERS.filter(SD_CONTAINERS.TYPE.rlike('1|2')).select('POOLID').distinct().collect()]) - cloud
 
-        merge = merge.withColumn('label', F.when(merge.TAPEPOOLID.isNotNull(), 0).when(merge.POOLID.isin(directory), 1).when(merge.POOLID.isin(cloud), 2))
-        merge = merge.filter(merge.label.isNotNull())
-
+        if multiclass:
+            merge = merge.withColumn('label', F.when(merge.TAPEPOOLID.isNotNull(), 0).when(merge.POOLID.isin(directory), 1).when(merge.POOLID.isin(cloud), 2))
+            merge = merge.filter(merge.label.isNotNull())
         if binary:
             bin_merge = merge.withColumn('label', F.when(merge.POOLID.isin(directory), 0).when(merge.POOLID.isin(cloud), 1))
             bin_merge = bin_merge.filter(bin_merge.label.isNotNull())
@@ -90,54 +92,80 @@ def combine(feature_list, binary=False):
     return merge, bin_merge
 
 
-def extract_features(feature_list, binary = False):
+def extract_features(feature_list, binary = False, multiclass = True, overwrite = False):
+    feature_list.sort()
+    dir_name = '_'.join(feature_list)
+    feature_dir = output_dir + "/features_" + dir_name + '/'
+    feature_binary_dir = output_dir + "/binary_features_" + dir_name + '/'
+
+    merged_data_binary = None
+    merged_data = None
+    # Here there should be a dictionary with every feature where the value is the cast type
+    if (binary and os.path.isdir(feature_binary_dir) and not overwrite):
+        binary = False
+        print('Using binary data already available')
+    if (multiclass and os.path.isdir(feature_binary_dir) and not overwrite):
+        multiclass = False
+        print('Using multiclass data already available')
+
+    if (not binary and not multiclass):
+        return None, None
+
     sc = SparkContext.getOrCreate()
     sqlContext = SQLContext(sc)
-    # Here there should be a dictionary with every feature where the value is the cast type
 
     merged_data, merged_data_binary = combine(feature_list, binary)
     feature_list.append('label')
 
+    if multiclass:
+        merged_data = merged_data.select(feature_list)
+        merged_data = merged_data.na.drop(subset=feature_list)
+    else:
+        merged_data = None
+
     if binary:
         merged_data_binary = merged_data_binary.select(feature_list)
-        merged_data_binary = merged_data_binary.filter(merged_data_binary.BFSIZE.isNotNull())
-        merged_data_binary = merged_data_binary.filter(merged_data_binary.HDRSIZE.isNotNull())
-        merged_data_binary = merged_data_binary.filter(merged_data_binary.NODETYPE.isNotNull())
-        merged_data_binary = merged_data_binary.filter(merged_data_binary.NODESTATE.isNotNull())
-        merged_data_binary = merged_data_binary.filter(merged_data_binary.METADATASIZE.isNotNull())
-        merged_data_binary = merged_data_binary.filter(merged_data_binary.STG_HINT.isNotNull())
-        # merged_data_binary = merged_data_binary.filter(merged_data_binary.FLAGS.isNotNull())
+        merged_data_binary = merged_data_binary.na.drop(subset=feature_list)
+        # merged_data_binary = merged_data_binary.filter(merged_data_binary.BFSIZE.isNotNull())
+        # merged_data_binary = merged_data_binary.filter(merged_data_binary.HDRSIZE.isNotNull())
+        # merged_data_binary = merged_data_binary.filter(merged_data_binary.NODETYPE.isNotNull())
+        # merged_data_binary = merged_data_binary.filter(merged_data_binary.NODESTATE.isNotNull())
+        # merged_data_binary = merged_data_binary.filter(merged_data_binary.METADATASIZE.isNotNull())
+        # merged_data_binary = merged_data_binary.filter(merged_data_binary.STG_HINT.isNotNull())
+        # # merged_data_binary = merged_data_binary.filter(merged_data_binary.FLAGS.isNotNull())
 
     else:
         merged_data_binary = None
 
     # Append label to feature list because it is not a feature but necessary
     # make a copy of the dataframe with only the feature columns and label
-    merged_data = merged_data.select(feature_list)
-    # merged_data.select('label').distinct().show()
-    merged_data = merged_data.filter(merged_data.BFSIZE.isNotNull())
-    merged_data = merged_data.filter(merged_data.HDRSIZE.isNotNull())
-    merged_data = merged_data.filter(merged_data.NODETYPE.isNotNull())
-    merged_data = merged_data.filter(merged_data.METADATASIZE.isNotNull())
-    merged_data = merged_data.filter(merged_data.NODESTATE.isNotNull())
-    merged_data = merged_data.filter(merged_data.STG_HINT.isNotNull())
-    # merged_data = merged_data.filter(merged_data.FLAGS.isNotNull())
 
-    merged_data = merged_data.repartition(2000)
+    # # merged_data.select('label').distinct().show()
+    # merged_data = merged_data.filter(merged_data.BFSIZE.isNotNull())
+    # merged_data = merged_data.filter(merged_data.HDRSIZE.isNotNull())
+    # merged_data = merged_data.filter(merged_data.NODETYPE.isNotNull())
+    # merged_data = merged_data.filter(merged_data.METADATASIZE.isNotNull())
+    # merged_data = merged_data.filter(merged_data.NODESTATE.isNotNull())
+    # merged_data = merged_data.filter(merged_data.STG_HINT.isNotNull())
+    # # merged_data = merged_data.filter(merged_data.FLAGS.isNotNull())
+
     # merged_data.select('label').distinct().show()
     # Right here we need to go through the feature list and properly cast and screen (filter out nulls) each value in the columns
     if binary:
         merged_data_binary = merged_data_binary.repartition(2000)
-        merged_data_binary.write.csv(output_dir + "/feature_extraction_binary", header = 'true')
+        merged_data_binary.write.csv(feature_binary_dir, header = 'true', mode='overwrite')
 
-    merged_data.write.csv(output_dir + "/feature_extraction", header = 'true')
+    if multiclass:
+        merged_data = merged_data.repartition(2000)
+        merged_data.write.csv(feature_dir, header = 'true', mode='overwrite')
+
     return merged_data, merged_data_binary
 
 
 def main():
     sc = SparkContext.getOrCreate()
     sqlContext = SQLContext(sc)
-    feature_list = 'BFSIZE HDRSIZE NODETYPE NODESTATE METADATASIZE STG_HINT'.split()
+    feature_list = 'BFSIZE HDRSIZE NODETYPE NODESTATE METADATASIZE'.split()
     extract_features(feature_list, binary=True)
     sc.stop()
     return 0

@@ -23,7 +23,8 @@ def main(features, algorithm, seed, maxiter, stepsize, numtrees, maxdepth, regpa
     feature_list = features.split()
     if algorithm == 'RandomForest':
         # python Driver.py 'BFSIZE HDRSIZE NODETYPE NODESTATE METADATASIZE STG_HINT' RandomForest
-        Learn.randomForest(feature_list, maxDepth=maxdepth, numTrees = 20, seed=seed)
+        # numTrees = 20
+        Learn.randomForest(feature_list, maxDepth=maxdepth, numTrees = numtrees, seed=seed)
     elif algorithm == 'GradientBoosting':
         Learn.gradientBoosting(feature_list, maxIter=maxiter, stepSize=stepsize)
     elif algorithm == 'MultinomialRegression':
