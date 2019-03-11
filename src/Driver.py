@@ -22,18 +22,22 @@ def main(features, algorithm, seed, maxiter, stepsize, numtrees, maxdepth, regpa
     sc.setLogLevel('ERROR')
     feature_list = features.split()
     if algorithm == 'RandomForest':
-        # python Driver.py 'BFSIZE HDRSIZE NODETYPE NODESTATE METADATASIZE STG_HINT' RandomForest
+        # python Driver.py 'BFSIZE HDRSIZE NODETYPE NODESTATE METADATASIZE' RandomForest
         # numTrees = 20
-        Learn.randomForest(feature_list, maxDepth=maxdepth, numTrees = numtrees, seed=seed)
+        df, _ = Process.extract_features(feature_list, binary = False, multiclass = True, overwrite = False)
+        Learn.randomForest(df, feature_list, maxDepth=maxdepth, numTrees = numtrees, seed=seed)
     elif algorithm == 'GradientBoosting':
-        Learn.gradientBoosting(feature_list, maxIter=maxiter, stepSize=stepsize)
+        _, df = Process.extract_features(feature_list, binary = True, multiclass = False, overwrite = False)
+        Learn.gradientBoosting(df, feature_list, maxIter=maxiter, stepSize=stepsize)
     elif algorithm == 'MultinomialRegression':
         # python Driver.py 'BFSIZE HDRSIZE NODETYPE NODESTATE METADATASIZE' MultinomialRegression --maxIter 10 --regParam 0.3 --elasticNetParam 0.8 --threshold 0.5
         # without metadatasize
-        Learn.multinomialRegression(feature_list, maxIter=maxiter, regParam=regparam, elasticNetParam = elasticnetparam, threshold=threshold)
+        df, _ = Process.extract_features(feature_list, binary = False, multiclass = True, overwrite = False)
+        Learn.multinomialRegression(df, feature_list, maxIter=maxiter, regParam=regparam, elasticNetParam=elasticnetparam, threshold=threshold)
     elif algorithm == 'LinearSVC':
         # python Driver.py 'BFSIZE HDRSIZE NODETYPE NODESTATE METADATASIZE' LinearSVC --maxIter 10 --regParam 0.3 --threshold 0.5
-        Learn.linearSVC(feature_list, maxIter=maxiter, regParam=regparam, threshold=threshold)
+        _, df = Process.extract_features(feature_list, binary = True, multiclass = False, overwrite = False)
+        Learn.linearSVC(df, feature_list, maxIter=maxiter, regParam=regparam, threshold=threshold)
 
     sc.stop()
 if __name__ == "__main__":

@@ -21,21 +21,11 @@ data_dir = '/home/cole/Workspace/School/Capstone/data/first_data_set/TestData/'
 # change to match your environment
 output_dir = data_dir + "/merge_data"
 
-def linearSVC(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIter=100, regParam=0.0, threshold=0.0):
+def linearSVC(df, feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIter=100, regParam=0.0, threshold=0.0):
     # Checks if there is a SparkContext running if so grab that if not start a new one
-    sc = SparkContext.getOrCreate()
-    sqlContext = SQLContext(sc)
+    # sc = SparkContext.getOrCreate()
+    # sqlContext = SQLContext(sc)
     # sqlContext.setLogLevel('INFO')
-    # read in data
-    df = sqlContext.read.csv(output_dir + '/feature_extraction_binary/*.csv', header= 'true')
-
-    # # create a features vector
-    df = df.withColumn('HDRSIZE', df.HDRSIZE.cast(FloatType()))
-    df = df.withColumn('BFSIZE', df.BFSIZE.cast(FloatType()))
-    df = df.withColumn('NODETYPE', df.NODETYPE.cast(FloatType()))
-    df = df.withColumn('NODESTATE', df.NODESTATE.cast(FloatType()))
-    df = df.withColumn('METADATASIZE', df.METADATASIZE.cast(FloatType()))
-    df = df.withColumn('label', df.label.cast(FloatType()))
 
     vector_assembler = VectorAssembler(inputCols=feature_list, outputCol="features")
     df_temp = vector_assembler.transform(df)
@@ -59,6 +49,7 @@ def linearSVC(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIter=100, regPa
 
     # print outputs
     print('LinearSVC')
+    print(feature_list)
     print(' Cloud %{}'.format((cloud/total) * 100))
     print(' Disk %{}'.format((disk/total) * 100))
 
@@ -74,25 +65,14 @@ def linearSVC(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIter=100, regPa
     print(' Cloud Misses %{}'.format((cloud_misses/cloud) * 100))
     print(' Disk Misses %{}'.format((disk_misses/disk) * 100))
 
-    return auc, 'LinearSVC: {}'.format(auc)
+    return auc, 'LinearSVC: {}'.format(auc), model
 
 
-def multinomialRegression(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIter = 100, regParam = 0.0, elasticNetParam = 0.0, threshold = 0.5):
+def multinomialRegression(df, feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIter = 100, regParam = 0.0, elasticNetParam = 0.0, threshold = 0.5):
     # Checks if there is a SparkContext running if so grab that if not start a new one
-    sc = SparkContext.getOrCreate()
-    sqlContext = SQLContext(sc)
+    # sc = SparkContext.getOrCreate()
+    # sqlContext = SQLContext(sc)
     # sqlContext.setLogLevel('INFO')
-
-    # read in data
-    df = sqlContext.read.csv(output_dir + '/feature_extraction/*.csv', header= 'true')
-
-    # # create a features vector
-    df = df.withColumn('HDRSIZE', df.HDRSIZE.cast(FloatType()))
-    df = df.withColumn('BFSIZE', df.BFSIZE.cast(FloatType()))
-    df = df.withColumn('NODETYPE', df.NODETYPE.cast(FloatType()))
-    df = df.withColumn('NODESTATE', df.NODESTATE.cast(FloatType()))
-    df = df.withColumn('METADATASIZE', df.METADATASIZE.cast(FloatType()))
-    df = df.withColumn('label', df.label.cast(FloatType()))
 
     vector_assembler = VectorAssembler(inputCols=feature_list, outputCol="features")
     df_temp = vector_assembler.transform(df)
@@ -114,6 +94,7 @@ def multinomialRegression(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIte
     cloud = df.filter(df.label == 2).count()
     # print outputs
     print('Multinomial Regression')
+    print(feature_list)
     print(' Cloud %{}'.format((cloud/total) * 100))
     print(' Disk %{}'.format((disk/total) * 100))
     print(' Tape %{}\n'.format((tape/total) * 100))
@@ -131,26 +112,14 @@ def multinomialRegression(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIte
     print(' Disk Misses %{}'.format((disk_misses/disk) * 100))
     print(' Tape Misses %{}'.format((tape_misses/tape) * 100))
 
-    return accuracy, 'Multinomial Regression: {}'.format(accuracy)
+    return accuracy, 'Multinomial Regression: {}'.format(accuracy), model
 
 
-def randomForest(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxDepth = 5, numTrees = 20, seed=None):
+def randomForest(df, feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxDepth = 5, numTrees = 20, seed=None):
     # Checks if there is a SparkContext running if so grab that if not start a new one
-    sc = SparkContext.getOrCreate()
-    sqlContext = SQLContext(sc)
+    # sc = SparkContext.getOrCreate()
+    # sqlContext = SQLContext(sc)
     # sqlContext.setLogLevel('INFO')
-    # read in data
-    df = sqlContext.read.csv(output_dir + '/feature_extraction/*.csv', header= 'true')
-
-    # # create a features vector
-    df = df.withColumn('HDRSIZE', df.HDRSIZE.cast(FloatType()))
-    df = df.withColumn('BFSIZE', df.BFSIZE.cast(FloatType()))
-    df = df.withColumn('NODETYPE', df.NODETYPE.cast(FloatType()))
-    df = df.withColumn('NODESTATE', df.NODESTATE.cast(FloatType()))
-    df = df.withColumn('METADATASIZE', df.METADATASIZE.cast(FloatType()))
-    # df = df.withColumn('STG_HINT', df.STG_HINT.cast(FloatType()))
-    # df = df.withColumn('FLAGS', df.FLAGS.cast(FloatType()))
-    df = df.withColumn('label', df.label.cast(FloatType()))
 
     vector_assembler = VectorAssembler(inputCols=feature_list, outputCol="features")
     df_temp = vector_assembler.transform(df)
@@ -173,6 +142,8 @@ def randomForest(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxDepth = 5, n
     cloud = df.filter(df.label == 2).count()
     # print outputs
     print('Random Forests')
+    print(feature_list)
+    print('Total Observations {}'.format(total))
     print(' Cloud %{}'.format((cloud/total) * 100))
     print(' Disk %{}'.format((disk/total) * 100))
     print(' Tape %{}\n'.format((tape/total) * 100))
@@ -190,24 +161,14 @@ def randomForest(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxDepth = 5, n
     print(' Disk Misses %{}'.format((disk_misses/disk) * 100))
     print(' Tape Misses %{}'.format((tape_misses/tape) * 100))
 
-    return accuracy, 'Random Forests: {}'.format(accuracy)
+    return accuracy, 'Random Forests: {}'.format(accuracy), model
 
 
-def gradientBoosting(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIter=20, stepSize=0.1):
+def gradientBoosting(df, feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIter=20, stepSize=0.1):
     # Checks if there is a SparkContext running if so grab that if not start a new one
-    sc = SparkContext.getOrCreate()
-    sqlContext = SQLContext(sc)
+    # sc = SparkContext.getOrCreate()
+    # sqlContext = SQLContext(sc)
     # sqlContext.setLogLevel('INFO')
-    # read in data
-    df = sqlContext.read.csv(output_dir + '/feature_extraction_binary/*.csv', header= 'true')
-
-    # # create a features vector
-    df = df.withColumn('HDRSIZE', df.HDRSIZE.cast(FloatType()))
-    df = df.withColumn('BFSIZE', df.BFSIZE.cast(FloatType()))
-    df = df.withColumn('NODETYPE', df.NODETYPE.cast(FloatType()))
-    df = df.withColumn('NODESTATE', df.NODESTATE.cast(FloatType()))
-    df = df.withColumn('METADATASIZE', df.METADATASIZE.cast(FloatType()))
-    df = df.withColumn('label', df.label.cast(FloatType()))
 
     vector_assembler = VectorAssembler(inputCols=feature_list, outputCol="features")
     df_temp = vector_assembler.transform(df)
@@ -234,6 +195,7 @@ def gradientBoosting(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIter=20,
     print('Gradient-Boosted Tree')
     print(' Cloud %{}'.format((cloud/total) * 100))
     print(' Disk %{}'.format((disk/total) * 100))
+    print(feature_list)
 
     # print(" Test Error = {}".format((1.0 - accuracy) * 100))
     # print(" Test Accuracy = {}\n".format(accuracy * 100))
@@ -247,7 +209,7 @@ def gradientBoosting(feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxIter=20,
     print(' Cloud Misses %{}'.format((cloud_misses/cloud) * 100))
     print(' Disk Misses %{}'.format((disk_misses/disk) * 100))
 
-    return auc, 'Gradient Boosted: {}'.format(auc)
+    return auc, 'Gradient Boosted: {}'.format(auc), model
 
 
 def compare_algorithms():
@@ -284,10 +246,25 @@ def compare_algorithms():
     return 0
 
 def main():
+    from Process import extract_features
     sc = SparkContext.getOrCreate()
+    sc.setLogLevel('ERROR')
     sqlContext = SQLContext(sc)
-    # randomForest()
-    # gradientBoosting()
+
+    feature_list = 'BFSIZE HDRSIZE NODETYPE NODESTATE METADATASIZE'.split()
+    merged_data, merged_data_binary = extract_features(feature_list, binary = True, multiclass = True, overwrite = True)
+
+    results = []
+
+    print('Start Random Forest')
+    results.append(randomForest(merged_data, feature_list = feature_list, maxDepth = 5, numTrees = 20, seed=None))
+    print('Start GradientBoosting')
+    results.append(gradientBoosting(merged_data_binary, feature_list = feature_list, maxIter=20, stepSize=0.1))
+
+    print('Results:')
+    for result in results:
+        print(result)
+
     sc.stop()
     return 0
 
