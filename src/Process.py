@@ -112,7 +112,7 @@ def extract_features(feature_list, binary = False, multiclass = True, overwrite 
         merged_data_binary = sqlContext.read.csv(feature_binary_dir, header= 'true')
         merged_data_binary = merged_data_binary.select(*(F.col(c).cast(FloatType()).alias(c) for c in feature_list + ['label']))
 
-    if (multiclass and os.path.isdir(feature_binary_dir) and not overwrite):
+    if (multiclass and os.path.isdir(feature_dir) and not overwrite):
         multiclass = False
         print('Using multiclass data already available')
         merged_data = sqlContext.read.csv(feature_dir, header= 'true')
@@ -125,20 +125,18 @@ def extract_features(feature_list, binary = False, multiclass = True, overwrite 
     if not merged_data_binary:
         merged_data_binary = merged_data_binary_res
 
-    feature_list.append('label')
-
     if multiclass:
-        merged_data = merged_data.select(feature_list)
-        merged_data = merged_data.na.drop(subset=feature_list)
+        merged_data = merged_data.select(feature_list + ['label'])
+        merged_data = merged_data.na.drop(subset=feature_list + ['label'])
         merged_data = merged_data.repartition(2000)
-        merged_data = merged_data.select(*(F.col(c).cast(FloatType()).alias(c) for c in feature_list))
+        merged_data = merged_data.select(*(F.col(c).cast(FloatType()).alias(c) for c in feature_list + ['label']))
         merged_data.write.csv(feature_dir, header = 'true', mode='overwrite')
 
     if binary:
-        merged_data_binary = merged_data_binary.select(feature_list)
-        merged_data_binary = merged_data_binary.na.drop(subset=feature_list)
+        merged_data_binary = merged_data_binary.select(feature_list + ['label'])
+        merged_data_binary = merged_data_binary.na.drop(subset=feature_list + ['label'])
         merged_data_binary = merged_data_binary.repartition(2000)
-        merged_data_binary = merged_data_binary.select(*(F.col(c).cast(FloatType()).alias(c) for c in feature_list))
+        merged_data_binary = merged_data_binary.select(*(F.col(c).cast(FloatType()).alias(c) for c in feature_list + ['label']))
         merged_data_binary.write.csv(feature_binary_dir, header = 'true', mode='overwrite')
 
     return merged_data, merged_data_binary

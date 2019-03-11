@@ -15,6 +15,11 @@ from pyspark.ml.classification import LinearSVC
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+import io
+
 # change to be reflective of your environment
 data_dir = '/home/cole/Workspace/School/Capstone/data/first_data_set/TestData/'
 
@@ -120,7 +125,7 @@ def randomForest(df, feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxDepth = 
     # sc = SparkContext.getOrCreate()
     # sqlContext = SQLContext(sc)
     # sqlContext.setLogLevel('INFO')
-
+    print('Sanity check that Im not doing something dumb like using the label in the feature_list: {}'.format(feature_list))
     vector_assembler = VectorAssembler(inputCols=feature_list, outputCol="features")
     df_temp = vector_assembler.transform(df)
 
@@ -133,8 +138,22 @@ def randomForest(df, feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxDepth = 
     predictions = model.transform(testData)
     # predictions.select("prediction", "label").show(100)
     # df.select('label').distinct().show()
-    evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="accuracy")
+    evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction")
+    # f1|weightedPrecision|weightedRecall|accuracy
+    evaluator.setMetricName('accuracy')
     accuracy = evaluator.evaluate(predictions)
+    evaluator.setMetricName('f1')
+    f1 = evaluator.evaluate(predictions)
+    evaluator.setMetricName('weightedPrecision')
+    weightedPrecision = evaluator.evaluate(predictions)
+    evaluator.setMetricName('weightedRecall')
+    weightedRecall = evaluator.evaluate(predictions)
+
+    print('accuracy {}'.format(accuracy))
+    print('f1 {}'.format(f1))
+    print('weightedPrecision {}'.format(weightedPrecision))
+    print('weightedRecall {}'.format(weightedRecall))
+
     # test distribution of outputs
     total = df.select('label').count()
     tape = df.filter(df.label == 0).count()
@@ -161,6 +180,16 @@ def randomForest(df, feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxDepth = 
     print(' Disk Misses %{}'.format((disk_misses/disk) * 100))
     print(' Tape Misses %{}'.format((tape_misses/tape) * 100))
 
+    # plt.xlabel("FPR", fontsize=14)
+    # plt.ylabel("TPR", fontsize=14)
+    # plt.title("ROC Curve", fontsize=14)
+    # plt.plot(fp[0:250], tp, linewidth=2)
+    # buf = io.BytesIO()
+    # plt.savefig(buf, format='png')
+    # buf.seek(0)
+    # image = tf.image.decode_png(buf.getvalue(), channels=4)
+    # image = tf.expand_dims(image, 0)
+    # summary_op = tf.summary.image("ROC Curve", image)
     return accuracy, 'Random Forests: {}'.format(accuracy), model
 
 
@@ -245,6 +274,7 @@ def compare_algorithms():
 
     return 0
 
+
 def main():
     from Process import extract_features
     sc = SparkContext.getOrCreate()
@@ -253,13 +283,13 @@ def main():
 
     feature_list = 'BFSIZE HDRSIZE NODETYPE NODESTATE METADATASIZE'.split()
     merged_data, merged_data_binary = extract_features(feature_list, binary = True, multiclass = True, overwrite = True)
-
+    # merged_data = merged_data.limit(2000)
     results = []
 
     print('Start Random Forest')
     results.append(randomForest(merged_data, feature_list = feature_list, maxDepth = 5, numTrees = 20, seed=None))
-    print('Start GradientBoosting')
-    results.append(gradientBoosting(merged_data_binary, feature_list = feature_list, maxIter=20, stepSize=0.1))
+    # print('Start GradientBoosting')
+    # results.append(gradientBoosting(merged_data_binary, feature_list = feature_list, maxIter=20, stepSize=0.1))
 
     print('Results:')
     for result in results:
