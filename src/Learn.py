@@ -15,13 +15,16 @@ from pyspark.ml.classification import LinearSVC
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 
+from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget, QPushButton
+from PyQt5.QtCore import pyqtSlot
+
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 import io
 
 # change to be reflective of your environment
-data_dir = '/home/cole/Workspace/School/Capstone/data/first_data_set/TestData/'
+data_dir = '/home/austin/Documents/Senior-Capstone-2018-2019/data/TestData/'
 
 # change to match your environment
 output_dir = data_dir + "/merge_data"
@@ -180,6 +183,61 @@ def randomForest(df, feature_list=['BFSIZE', 'HDRSIZE', 'NODETYPE'], maxDepth = 
     print(' Disk Misses %{}'.format((disk_misses/disk) * 100))
     print(' Tape Misses %{}'.format((tape_misses/tape) * 100))
 
+    # Gui Metrics =======================================================
+    metrics_gui = QApplication([])
+    window = QWidget()
+    layout = QVBoxLayout()
+
+    data_label = QLabel('Random Forests\n Total Observations {}'.format(total))
+    cloud_label = QLabel(' Cloud %{}'.format((cloud/total) * 100))
+    disk_label = QLabel(' Disk %{}'.format((disk/total) * 100))
+    tape_label = QLabel(' Tape %{}\n'.format((tape/total) * 100))
+
+    test_error_label = QLabel(" Test Error = {}".format((1.0 - accuracy) * 100))
+    test_accuracy_label = QLabel(" Test Accuracy = {}\n".format(accuracy * 100))
+
+    disk_misses_label = QLabel(' Disk Misses %{}'.format((disk_misses/disk) * 100))
+    tape_misses_label = QLabel(' Tape Misses %{}'.format((tape_misses/tape) * 100))
+    cloud_misses_label = QLabel(' Cloud Misses %{}'.format((cloud_misses/cloud) * 100))
+
+    export_button = QPushButton('Export Data')
+    export_button.setToolTip('Exports the data to a log file')
+    export_button.move(100, 10)
+
+    def on_click_export():
+        log_file = open("Log.txt", "w")
+        file_object.write('Random Forests\n Total Observations {}\n'.format(total))
+        file_object.write(' Cloud %{}\n'.format((cloud/total) * 100))
+        file_object.write(' Disk %{}\n'.format((disk/total) * 100))
+        file_object.write(' Tape %{}\n'.format((tape/total) * 100))
+        file_object.write("\n")
+        file_object.write(" Test Error = {}\n".format((1.0 - accuracy) * 100))
+        file_object.write(" Test Accuracy = {}\n".format(accuracy * 100))
+        file_object.write("\n")
+        file_object.write(' Cloud Misses %{}\n'.format((cloud_misses/cloud) * 100))
+        file_object.write(' Disk Misses %{}\n'.format((disk_misses/disk) * 100))
+        file_object.write(' Tape Misses %{}\n'.format((tape_misses/tape) * 100))
+        file_object.close()
+
+    export_button.clicked.connect(on_click_export)
+
+    layout.addWidget(data_label)
+    layout.addWidget(cloud_label)
+    layout.addWidget(disk_label)
+    layout.addWidget(tape_label)
+    layout.addWidget(test_error_label)
+    layout.addWidget(test_accuracy_label)
+    layout.addWidget(disk_misses_label)
+    layout.addWidget(tape_misses_label)
+    layout.addWidget(cloud_misses_label)
+
+    layout.addWidget(export_button)
+
+    window.setLayout(layout)
+    window.show()
+    metrics_gui.exec_()
+    # End Gui metrics ==================================================
+
     # plt.xlabel("FPR", fontsize=14)
     # plt.ylabel("TPR", fontsize=14)
     # plt.title("ROC Curve", fontsize=14)
@@ -294,6 +352,8 @@ def main():
     print('Results:')
     for result in results:
         print(result)
+
+
 
     sc.stop()
     return 0
